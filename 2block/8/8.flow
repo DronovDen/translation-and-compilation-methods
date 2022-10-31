@@ -1,0 +1,73 @@
+import lingo/pegcode/driver;
+
+AlgExp ::= AlgSum, AlgMul, AlgMin, AlgDiv, AlgNeg, AlgVar, AlgInt;
+    AlgSum(lhs : AlgExp, rhs : AlgExp);
+    AlgMin(lhs : AlgExp, rhs : AlgExp);
+    AlgMul(lhs : AlgExp, rhs : AlgExp);
+    AlgDiv(lhs : AlgExp, rhs : AlgExp);
+    AlgNeg(e : AlgExp);
+    AlgVar(name : string);
+    AlgInt(val : int);
+
+alg2RPNstring(exp: AlgExp) -> string {
+    switch (exp) {
+        AlgSum(lhs, rhs) : alg2RPNstring(lhs) + " " + alg2RPNstring(rhs) + " +";
+        AlgMin(lhs, rhs) : alg2RPNstring(lhs) + " " + alg2RPNstring(rhs) + " -";
+        AlgMul(lhs, rhs) : alg2RPNstring(lhs) + " " + alg2RPNstring(rhs) + " *";
+        AlgDiv(lhs, rhs) : alg2RPNstring(lhs) + " " + alg2RPNstring(rhs) + " /";
+        AlgNeg(e): "-" + alg2s(e);
+        AlgVar(name): name;
+        AlgInt(val): i2s(val);
+    }
+}
+
+alg2s(ex : AlgExp) -> string {
+    switch (ex) {
+        AlgSum(lhs, rhs): "(" + alg2s(lhs) + " + " + alg2s(rhs) + ")";
+        AlgMin(lhs, rhs): "(" + alg2s(lhs) + " - " + alg2s(rhs) + ")";
+        AlgMul(lhs, rhs): "(" + alg2s(lhs) + " * " + alg2s(rhs) + ")";
+        AlgDiv(lhs, rhs): "(" + alg2s(lhs) + " / " + alg2s(rhs) + ")";
+        AlgNeg(e): "-" + alg2s(e);
+        AlgVar(name): name;
+        AlgInt(val): i2s(val);
+    }
+}
+
+alg2i(ex : AlgExp, variables : Tree<string, int>) -> int {
+    switch (ex) {
+        AlgSum(lhs, rhs): alg2i(lhs, variables) + alg2i(rhs, variables);
+        AlgMul(lhs, rhs): alg2i(lhs, variables) * alg2i(rhs, variables);
+        AlgMin(lhs, rhs): alg2i(lhs, variables) - alg2i(rhs, variables);
+        AlgDiv(lhs, rhs): alg2i(lhs, variables) / alg2i(rhs, variables);
+        AlgNeg(e): -alg2i(e, variables);
+        AlgVar(name): {
+            switch(lookupTree(variables, name)) {
+                None(): 0;
+                Some(val): val;
+            }
+        }
+        AlgInt(val): val;
+    }
+}
+
+s2alg(str : string) -> AlgExp {
+    e_gr = "#include algebr.lingo";
+    parsic(compilePegGrammar(e_gr), str, defaultPegActions)
+}
+
+getVariables() -> Tree<string, int> {
+	parameters_array = getAllUrlParametersArray();
+	fold(parameters_array, makeTree(),\ tree, parameter-> {
+			setTree(tree, parameter[0], s2i(parameter[1]))
+		}
+	);
+}
+
+main() {
+    variables = getVariables();
+    expr = s2alg("(((x-y)*z)+1)");
+    rpn = alg2RPNstring(expr);
+    println(rpn);
+    println(alg2i(expr, variables));
+    quit(0);
+}

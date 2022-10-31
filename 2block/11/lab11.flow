@@ -1,0 +1,212 @@
+import string;
+import lingo/pegcode/driver;
+import const;
+
+AlgExp ::= Const, Variable, AlgMul, AlgSum, AlgMin, AlgDiv, AlgPow;
+    Variable : (name : string);
+    AlgMul : (left : AlgExp, right : AlgExp);
+    AlgSum : (left : AlgExp, right : AlgExp);
+    AlgMin : (left : AlgExp, right : AlgExp);
+    AlgDiv : (left : AlgExp, right : AlgExp);
+    AlgPow : (base : AlgExp, expnt : AlgExp);
+
+parser = compilePegGrammar("#include lab11.lingo");
+
+s2expr(str : string) -> AlgExp {
+    parsic(parser, str, defaultPegActions);
+}
+
+expr2s(expr : AlgExp) -> string {
+    switch (expr) {
+        Const() : c2s(expr);
+        Variable(name) : name;
+        AlgMul(left, right) : concatStrings(["(", expr2s(left), "*", expr2s(right), ")"]);
+        AlgSum(left, right) : concatStrings(["(", expr2s(left), "+", expr2s(right), ")"]);
+        AlgMin(left, right) : concatStrings(["(", expr2s(left), "-", expr2s(right), ")"]);
+        AlgDiv(left, right) : concatStrings(["(", expr2s(left), "/", expr2s(right), ")"]);
+        AlgPow(base, expnt) : concatStrings(["(", expr2s(base), "^", expr2s(expnt), ")"]);
+    }
+}
+
+calc(expr : AlgExp, variables : Tree<string, Const>) -> Const {
+    switch (expr) {
+        Const() : expr;
+        Variable(name) : lookupTreeDef(variables, name, NaN());
+        AlgMul(left, right) : calcFunc2args(left, right, cMul, variables);
+        AlgSum(left, right) : calcFunc2args(left, right, cAdd, variables);
+        AlgMin(left, right) : calcFunc2args(left, right, cSub, variables);
+        AlgDiv(left, right) : calcFunc2args(left, right, cDiv, variables);
+        AlgPow(left, right) : calcFunc2args(left, right, cPow, variables);
+    }
+}
+
+calcFunc2args(left : AlgExp, right : AlgExp, func : (Const, Const) -> Const, variables : Tree<string, Const>) -> Const {
+    leftCalculated = calc(left, variables);
+    rightCalculated = calc(right, variables);
+    func(leftCalculated, rightCalculated);
+}
+
+simplify(expr : AlgExp) -> AlgExp {
+    expr_new = simplifyOnce(expr);
+
+    if (expr_new == expr) {
+        expr;
+    } else {
+        simplify(expr_new);
+    }
+}
+
+simplifyOnce(expr : AlgExp) -> AlgExp {
+    switch (expr) {
+        AlgMul(left, right) : simplifyHelper(left, right, cMul, simplifyMul);
+        AlgSum(left, right) : simplifyHelper(left, right, cAdd, simplifyAdd);
+        AlgMin(left, right) : simplifyHelper(left, right, cSub, simplifySub);
+        AlgDiv(left, right) : simplifyHelper(left, right, cDiv, simplifyDiv);
+        AlgPow(left, right) : simplifyHelper(left, right, cPow, simplifyPow);
+        default : expr;
+    }
+}
+
+simplifyHelper(left : AlgExp, right : AlgExp, operation : (Const, Const) -> Const, simplification : (AlgExp, AlgExp) -> AlgExp) -> AlgExp {
+    switch (left) {
+        Const() : {
+            switch (right) {
+                Const(): operation(left, right);
+                default : simplification(left, right);
+            }
+        }
+        default : simplification(left, right);
+    }
+}
+
+simplifyMul(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (left == Rat(0, 1) || right == Rat(0, 1)) {
+        Rat(0, 1);
+    } else if (left == Rat(1, 1)) {
+        right;
+    } else if (right == Rat(1, 1)) {
+        left;
+    } else {
+        AlgMul(simplify(left), simplify(right));
+    }
+}
+
+simplifyAdd(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (left == Rat(0, 1)) {
+        right;
+    } else if (right == Rat(1, 0)) {
+        left;
+    } else {
+        AlgSum(simplify(left), simplify(right));
+    }
+}
+
+simplifySub(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (right == Rat(0, 1)) {
+        left;
+    } else {
+        AlgMin(simplify(left), simplify(right));
+    }
+}
+
+simplifyDiv(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (right == Rat(0, 1)) {
+        NaN();
+    } else if (right == Rat(1, 1)) {
+        left;
+    } else {
+        AlgDiv(simplify(left), simplify(right));
+    }
+}
+
+simplifyPow(base : AlgExp, expnt : AlgExp) -> AlgExp {
+    if (base == NaN() || expnt == NaN()) {
+        NaN();
+    } else if (expnt == Rat(1, 1)) {
+        base;
+    } else if (expnt == Rat(0, 1)) {
+        Rat(1, 1);
+    } else {
+        AlgPow(simplify(base), simplify(expnt));
+    }
+}
+
+differentiate(expr: AlgExp, x: Variable) -> AlgExp {
+    switch (expr) {
+        NaN() : NaN();
+        Rat(num, den) : Rat(0, 1);
+        Variable(name) : {
+            if (name == x.name) {
+                Rat(1, 1);
+            } else {
+                Rat(0, 1);
+            }
+        }
+        // (u * v)x = ((ux * v) + (u * vx))
+		AlgMul(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgSum(AlgMul(ux, v), AlgMul(u, vx)));
+        }
+        // (u + v)x = (ux + vx) 
+        AlgSum(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgSum(ux, vx));
+        }
+        // (u - v)x == (ux - vx)
+        AlgMin(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgMin(ux, vx));
+        }
+        // (u / v)x = (((ux * v) - (u * vx)) / (v * v))
+        AlgDiv(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgDiv(AlgMin(AlgMul(ux, v), AlgMul(u, vx)), AlgMul(v, v)));
+        }
+        // (u ^ v)x == ((v * (u ^ (v - 1))) * ux) [ + (u ^ v) * ln(u) * vx]
+        AlgPow(u, v): {
+            if (differentiate(v, x) == Rat(0, 1)) {
+                ux = differentiate(u, x);
+                simplify(AlgMul(AlgMul(v, AlgPow(u, AlgMin(v, Rat(1, 1)))), ux));
+            } else {
+                NaN();
+            }
+        }
+    }
+}
+
+testExpr(expr : AlgExp, variables : Tree<string, Const>) -> void {
+    println("====================Test====================");
+    println(expr2s(expr));
+    println(c2s(calc(expr, variables)));
+}
+
+main() {
+    variables = [Pair("x", Rat(3, 1)), Pair("y", Rat(2, 1))];
+    varTree = setTreeValues(makeTree(), variables);
+
+    expr1 = differentiate(s2expr("(x ^ y)"), Variable("x"));
+    expr2 = differentiate(s2expr("(x ^ y)"), Variable("y"));
+    expr3 = differentiate(s2expr("((x / 3) ^ 3)"), Variable("x"));
+    expr4 = differentiate(s2expr("((x - 3) * (x ^ 2))"), Variable("x"));
+    expr0 = differentiate(s2expr("(x ^ 1)"), Variable("x"));
+    
+    testExpr(expr1, varTree);
+    testExpr(expr2, varTree);
+    testExpr(expr3, varTree);
+    testExpr(expr4, varTree);
+    testExpr(expr0, varTree);
+
+    quit(0);
+}

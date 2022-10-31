@@ -1,0 +1,370 @@
+import string;
+import lingo/pegcode/driver;
+//import const;
+import math/math;
+
+
+AlgExp ::= Const, Variable, AlgMul, AlgSum, AlgMin, AlgDiv, AlgPow, AlgLn;
+    Variable : (name : string);
+    AlgMul : (left : AlgExp, right : AlgExp);
+    AlgSum : (left : AlgExp, right : AlgExp);
+    AlgMin : (left : AlgExp, right : AlgExp);
+    AlgDiv : (left : AlgExp, right : AlgExp);
+    AlgPow : (base : AlgExp, expnt : AlgExp);
+    AlgLn : (base : AlgExp);
+    AlgInt : (i : int);
+    AlgDouble : (d : double);
+
+parser = compilePegGrammar("#include lab11.lingo");
+
+Double(number : double);
+
+Const ::= double, NaN, Int, Double;
+    double : (numer : int, denom : int);
+    NaN : ();
+    Int : (i : int);
+    Double : (d : double);
+    getDouble(num : Double) -> double;
+    cMul(Const, Const) -> Const;
+    cAdd(Const, Const) -> Const;
+    cSub(Const, Const) -> Const;
+    cPow(Const, Const) -> Const;
+    cDiv(Const, Const) -> Const;
+    c2s(Const) -> string;
+    cLn(Const) -> Const;
+
+abs_gcd(a : int, b : int) -> int {
+    iabs(gcd(a, b));
+}
+
+funcHelper(left : Const, right : Const, ratFunc : (double, double) -> Const) -> Const{
+    switch (left) {
+        double(lnum, lden) : {
+            switch (right) {
+                double(rnum, rden) : {
+                    ratFunc(left, right);
+                }
+                NaN() : NaN();
+            }
+        }
+        NaN() : NaN();
+    }
+}
+
+getDouble(num : Double) -> double {
+    num.number;
+}
+
+/* cLn(base : Const) -> Const {
+    double(ceil(log(getDouble(calc(base, variables)))), 1);
+    //double(s2i(d2s(double(base, 1))), 1);
+    //funcHelper(left, right, rLn);
+} */
+
+cMul(left : Const, right : Const) -> Const {
+    funcHelper(left, right, rMul);
+}
+
+cAdd(left : Const, right : Const) -> Const {
+    funcHelper(left, right, rAdd);
+}
+
+cSub(left : Const, right : Const) -> Const {
+    funcHelper(left, right, rSub);
+}
+
+cPow(left : Const, right : Const) -> Const {
+    funcHelper(left, right, rPow);
+}
+
+cDiv(left : Const, right : Const) -> Const {
+    funcHelper(left, right, rDiv);
+}
+
+rMul(left : double, right : double) -> Const {
+    num = left.numer * right.numer;
+    den = left.denom * right.denom;
+    gcd = abs_gcd(num, den);
+    (num / gcd) / (den / gcd);
+}
+
+rAdd(left : double, right : double) -> Const {
+    num = left.numer * right.denom + right.numer * left.denom;
+    den = left.denom * right.denom;
+    gcd = abs_gcd(num, den);
+    double(num / gcd, den / gcd);
+}
+
+rSub(left : double, right : double) -> Const {
+    num = left.numer * right.denom - right.numer * left.denom;
+    den = left.denom * right.denom;
+    gcd = abs_gcd(num, den);
+    double(num / gcd, den / gcd);
+}
+
+rPow(base : double, expnt : double) -> Const {
+    if (expnt.denom != 1) {
+        NaN();
+    } else if (base.numer == 0 && expnt.numer == 0) {
+        NaN();
+    } else if (base.numer == 0) {
+        double(0, 1);
+    } else if (expnt.numer == 0) {
+        double(1, 1);
+    } else if (expnt.numer < 0) {
+        rPow(double(base.denom, base.numer), double(-expnt.numer, expnt.denom));
+    } else {
+        cMul(rPow(base, double(expnt.numer - 1, expnt.denom)), base);
+    }
+}
+
+rDiv(left : double, right : double) -> Const {
+    if (right.numer == 0) {
+        NaN();
+    } else {
+        rMul(left, double(right.denom, right.numer));
+    }
+}
+
+c2s(const : Const) -> string {
+    switch (const) {
+        double(num, den): r2s(const);
+        NaN() : "NaN";
+    }
+}
+
+r2s(rat : double) -> string {
+    if (rat.denom == 1) {
+        if (rat.numer > 0) {
+            i2s(rat.numer);
+        } else {
+            concatStrings(["(", i2s(rat.numer), ")"]);
+        }
+    } else {
+        concatStrings(["(", i2s(rat.numer), "/", i2s(rat.denom), ")"]);
+    }
+}
+
+s2expr(str : string) -> AlgExp {
+    parsic(parser, str, defaultPegActions);
+}
+
+expr2s(expr : AlgExp) -> string {
+    switch (expr) {
+        Const() : c2s(expr);
+        Variable(name) : name;
+        AlgMul(left, right) : concatStrings(["(", expr2s(left), "*", expr2s(right), ")"]);
+        AlgSum(left, right) : concatStrings(["(", expr2s(left), "+", expr2s(right), ")"]);
+        AlgMin(left, right) : concatStrings(["(", expr2s(left), "-", expr2s(right), ")"]);
+        AlgDiv(left, right) : concatStrings(["(", expr2s(left), "/", expr2s(right), ")"]);
+        AlgPow(base, expnt) : concatStrings(["(", expr2s(base), "^", expr2s(expnt), ")"]);
+        AlgLn(base) : concatStrings(["ln(", expr2s(base), ")"]);
+    }
+}
+
+calc(expr : AlgExp, variables : Tree<string, Const>) -> Const {
+    switch (expr) {
+        Const() : expr;
+        Variable(name) : lookupTreeDef(variables, name, NaN());
+        AlgMul(left, right) : calcFunc2args(left, right, cMul, variables);
+        AlgSum(left, right) : calcFunc2args(left, right, cAdd, variables);
+        AlgMin(left, right) : calcFunc2args(left, right, cSub, variables);
+        AlgDiv(left, right) : calcFunc2args(left, right, cDiv, variables);
+        AlgPow(left, right) : calcFunc2args(left, right, cPow, variables);
+        //AlgLn(base) : calcFunc2args(base, base, cLn, variables);
+        //AlgLn(base) : double(ceil(log(calc(base, variables))), 1);
+        AlgLn(base) : double(ceil(log(getDouble(calc(base, variables)))), 1);
+    }
+}
+
+calcFunc2args(left : AlgExp, right : AlgExp, func : (Const, Const) -> Const, variables : Tree<string, Const>) -> Const {
+    leftCalculated = calc(left, variables);
+    rightCalculated = calc(right, variables);
+    func(leftCalculated, rightCalculated);
+}
+
+simplify(expr : AlgExp) -> AlgExp {
+    expr_new = simplifyOnce(expr);
+
+    if (expr_new == expr) {
+        expr;
+    } else {
+        simplify(expr_new);
+    }
+}
+
+simplifyOnce(expr : AlgExp) -> AlgExp {
+    switch (expr) {
+        AlgMul(left, right) : simplifyHelper(left, right, cMul, simplifyMul);
+        AlgSum(left, right) : simplifyHelper(left, right, cAdd, simplifyAdd);
+        AlgMin(left, right) : simplifyHelper(left, right, cSub, simplifySub);
+        AlgDiv(left, right) : simplifyHelper(left, right, cDiv, simplifyDiv);
+        AlgPow(left, right) : simplifyHelper(left, right, cPow, simplifyPow);
+        AlgLn(base) : simplifyHelper(base, base, cLn, simplifyLn);
+        default : expr;
+    }
+}
+
+simplifyHelper(left : AlgExp, right : AlgExp, operation : (Const, Const) -> Const, simplification : (AlgExp, AlgExp) -> AlgExp) -> AlgExp {
+    switch (left) {
+        Const() : {
+            switch (right) {
+                Const(): operation(left, right);
+                default : simplification(left, right);
+            }
+        }
+        default : simplification(left, right);
+    }
+}
+
+simplifyMul(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (left == double(0, 1) || right == double(0, 1)) {
+        double(0, 1);
+    } else if (left == double(1, 1)) {
+        right;
+    } else if (right == double(1, 1)) {
+        left;
+    } else {
+        AlgMul(simplify(left), simplify(right));
+    }
+}
+
+simplifyLn(left : AlgExp, right : AlgExp) -> AlgExp {
+    base = left;
+    if(base == double(s2i(d2s(E_CONST)), 1)) {
+        double(1, 1);
+    } else if(base == double(1, 1)) {
+        double(0, 1);
+    } else {
+        AlgLn(base);
+    }
+}
+
+simplifyAdd(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (left == double(0, 1)) {
+        right;
+    } else if (right == double(1, 0)) {
+        left;
+    } else {
+        AlgSum(simplify(left), simplify(right));
+    }
+}
+
+simplifySub(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (right == double(0, 1)) {
+        left;
+    } else {
+        AlgMin(simplify(left), simplify(right));
+    }
+}
+
+simplifyDiv(left : AlgExp, right : AlgExp) -> AlgExp {
+    if (left == NaN() || right == NaN()) {
+        NaN();
+    } else if (right == double(0, 1)) {
+        NaN();
+    } else if (right == double(1, 1)) {
+        left;
+    } else {
+        AlgDiv(simplify(left), simplify(right));
+    }
+}
+
+simplifyPow(base : AlgExp, expnt : AlgExp) -> AlgExp {
+    if (base == NaN() || expnt == NaN()) {
+        NaN();
+    } else if (expnt == double(1, 1)) {
+        base;
+    } else {
+        AlgPow(simplify(base), simplify(expnt));
+    }
+}
+
+differentiate(expr: AlgExp, x: Variable) -> AlgExp {
+    switch (expr) {
+        NaN() : NaN();
+        double(num, den) : double(0, 1);
+        Variable(name) : {
+            if (name == x.name) {
+                double(1, 1);
+            } else {
+                double(0, 1);
+            }
+        }
+        // (u * v)x = ((ux * v) + (u * vx))
+		AlgMul(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgSum(AlgMul(ux, v), AlgMul(u, vx)));
+        }
+        // (u + v)x = (ux + vx) 
+        AlgSum(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgSum(ux, vx));
+        }
+        // (u - v)x == (ux - vx)
+        AlgMin(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgMin(ux, vx));
+        }
+        // (u / v)x = (((ux * v) - (u * vx)) / (v * v))
+        AlgDiv(u, v): {
+            ux = differentiate(u, x);
+            vx = differentiate(v, x);
+            simplify(AlgDiv(AlgMin(AlgMul(ux, v), AlgMul(u, vx)), AlgMul(v, v)));
+        }
+        // (u ^ v)x == ((v * (u ^ (v - 1))) * ux) [ + (u ^ v) * ln(u) * vx]
+        AlgPow(u, v): {
+            if (differentiate(v, x) == double(0, 1)) {
+                ux = differentiate(u, x);
+                simplify(AlgMul(AlgMul(v, AlgPow(u, AlgMin(v, double(1, 1)))), ux));
+            } else if (differentiate(v, x) != double(0, 1)){
+                //NaN();
+                dif = differentiate(v, x);
+                simplify(AlgSum(AlgMul(dif, v), AlgMul(AlgMul(dif, v), AlgLn(u))));
+            } else {
+                NaN();
+            }
+        }
+        AlgLn(u): {
+           ux = differentiate(u, x);
+           simplify(AlgMul(AlgPow(u, double(-1, 1)), ux));
+        }
+    }
+}
+
+testExpr(expr : AlgExp, variables : Tree<string, Const>) -> void {
+    println("====================Test====================");
+    println(expr2s(expr));
+    println(c2s(calc(expr, variables)));
+}
+
+main() {
+    /* x = 45.0;
+    println(log(exp(x))); */
+
+    variables = [Pair("x", double(3, 1)), Pair("y", double(2, 1))];
+    varTree = setTreeValues(makeTree(), variables);
+
+    expr1 = differentiate(s2expr("(x ^ y)"), Variable("x"));
+    expr2 = differentiate(s2expr("(x ^ y)"), Variable("y"));
+    expr3 = differentiate(s2expr("((x / 3) ^ 3)"), Variable("x"));
+    expr4 = differentiate(s2expr("((x - 3) * (x ^ 2))"), Variable("x"));
+    expr0 = differentiate(s2expr("(x ^ x)"), Variable("x"));
+    
+    testExpr(expr1, varTree);
+    testExpr(expr2, varTree);
+    testExpr(expr3, varTree);
+    testExpr(expr4, varTree);
+    testExpr(expr0, varTree);
+
+    quit(0);
+}

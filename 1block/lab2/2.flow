@@ -1,0 +1,14 @@
+//Написать функцию, считающую сумму целых чисел в массиве: [1, 2, 3] в 6.
+//Использовать функции: fold.
+
+import runtime;
+import ds/array;
+
+arraySum(arr: [int]) -> int{
+    fold(arr, 0, \x ,y -> x+y); //x += y, where y iterates in array
+}
+
+main(){
+    println(arraySum([1,2,3,4,5]));
+    quit(0);
+}

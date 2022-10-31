@@ -1,0 +1,125 @@
+import lingo/pegcode/driver;
+import math/math;
+import runtime;
+import ds/array;
+import string;
+
+AlgExp ::= AlgSum, AlgMul, AlgMin, AlgDiv, AlgNeg, AlgVar, AlgInt, AlgPow;
+    AlgSum(lhs : AlgExp, rhs : AlgExp);
+    AlgMin(lhs : AlgExp, rhs : AlgExp);
+    AlgMul(lhs : AlgExp, rhs : AlgExp);
+    AlgDiv(lhs : AlgExp, rhs : AlgExp);
+    AlgNeg(e : AlgExp);
+    AlgVar(name : string);
+    AlgInt(val : int);
+	AlgPow(lhs : AlgExp, rhs : AlgExp);
+
+// Rational number
+RatNum(num : int, den : int);
+
+ratOne = RatNum(1, 1);
+ratZero = RatNum(0, 1);
+
+ratSum(x : RatNum, y : RatNum) -> RatNum {
+	a = x.num * y.den + y.num * x.den;
+	b = x.den * y.den;
+	z = gcd(a, b);
+	RatNum(a / z,  b / z)
+}
+
+ratMin(x : RatNum, y : RatNum) -> RatNum {
+	a = x.num * y.den - y.num * x.den;
+	b = x.den * y.den;
+	z = gcd(a, b);
+	RatNum(a / z,  b /z)
+}
+
+ratMul(x : RatNum, y : RatNum) -> RatNum {
+	a = x.num * y.num;
+	b = x.den * y.den;
+	z = gcd(a, b);
+	RatNum(a / z,  b /z)
+}
+
+ratDiv(x : RatNum, y : RatNum) -> RatNum {
+	a = x.num * y.den;
+	b = x.den * y.num;
+	z = gcd(a, b);
+	RatNum(a / z,  b /z)
+}
+
+ratNeg(x : RatNum) -> RatNum {
+	RatNum(- x.num,  x.den)
+}
+
+ratPow(x : RatNum, y : RatNum) -> RatNum {
+    if (y.num == 0) {
+        ratOne;
+    }
+	else if (x.num == 0) {
+		ratZero;
+	} 
+	else {
+        right : double = i2d(y.num) / i2d(y.den);
+		RatNum(s2i(d2s(dpow(i2d(x.num), right))), s2i(d2s(dpow(i2d(x.den), right))));
+    }
+}
+
+rat2s(x : RatNum) -> string {
+	if (x.den == 1 ) i2s(x.num) else 
+	if (x.den == 0 ) "nan" else
+	i2s(x.num) + " / " + i2s(x.den)  
+}
+
+alg2s(ex : AlgExp) -> string {
+    switch (ex) {
+        AlgSum(lhs, rhs): "(" + alg2s(lhs) + " + " + alg2s(rhs) + ")";
+        AlgMin(lhs, rhs): "(" + alg2s(lhs) + " - " + alg2s(rhs) + ")";
+        AlgMul(lhs, rhs): "(" + alg2s(lhs) + " * " + alg2s(rhs) + ")";
+        AlgDiv(lhs, rhs): "(" + alg2s(lhs) + " / " + alg2s(rhs) + ")";
+        AlgNeg(e): "-" + alg2s(e);
+        AlgVar(name): name;
+        AlgInt(val): i2s(val);
+		AlgPow(lhs, rhs): "(" + alg2s(lhs) + " ^ " + alg2s(rhs) + ")";
+    }
+}
+
+alg2Rat(ex : AlgExp, variables : Tree<string, RatNum>) -> RatNum {
+    switch (ex) {
+        AlgSum(lhs, rhs): ratSum(alg2Rat(lhs, variables), alg2Rat(rhs, variables));
+        AlgMul(lhs, rhs): ratMul(alg2Rat(lhs, variables), alg2Rat(rhs, variables));
+        AlgMin(lhs, rhs): ratMin(alg2Rat(lhs, variables), alg2Rat(rhs, variables));
+        AlgDiv(lhs, rhs): ratDiv(alg2Rat(lhs, variables), alg2Rat(rhs, variables));
+        AlgNeg(e): ratNeg(alg2Rat(e, variables));
+        AlgVar(name): {
+            switch(lookupTree(variables, name)) {
+                None(): ratZero;
+                Some(val): val;
+            }
+        }
+        AlgInt(val): RatNum(val, 1);
+		AlgPow(lhs, rhs): ratPow(alg2Rat(lhs, variables), alg2Rat(rhs, variables));
+    }
+}
+
+s2alg(str : string) -> AlgExp {
+    e_gr = "#include algebr.lingo";
+    parsic(compilePegGrammar(e_gr), str, defaultPegActions)
+}
+
+getVariables() -> Tree<string, RatNum> {
+	tree : Tree<string, RatNum> = makeTree();
+	tree1 = setTree(tree, "x", RatNum(27, 1));
+	tree2 = setTree(tree1, "y", RatNum(1, 3));
+	setTree(tree2, "z", RatNum(2, 1));
+}
+
+main() {
+    variables = getVariables();
+    println(variables);
+    tree = s2alg("(x^y)");
+    //tree = s2alg("(1 / 2)");
+    println(tree);
+    println(rat2s(alg2Rat(tree, variables)));
+    quit(0);
+}

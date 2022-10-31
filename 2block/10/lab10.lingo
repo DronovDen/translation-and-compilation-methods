@@ -1,0 +1,14 @@
+exp = const | mul | add | sub | div | pow | var;
+ws = (' ' | '\t' | '\n')*;
+
+letter = ('a' - 'z') | ('A' - 'Z');
+permch = letter | '_' | ('0' - '9');
+var = (letter permch*)$str {AlgVar($str)};
+
+const = ('0' - '9')+$str {Rat(s2i($str), 1)};
+
+mul = ws '(' ws exp:lhs ws '*' ws exp:rhs ws ')' ws {AlgMul(:lhs, :rhs)};
+add = ws '(' ws exp:lhs ws '+' ws exp:rhs ws ')' ws {AlgSum(:lhs, :rhs)};
+sub = ws '(' ws exp:lhs ws '-' ws exp:rhs ws ')' ws {AlgMin(:lhs, :rhs)};
+div = ws '(' ws exp:lhs ws '/' ws exp:rhs ws ')' ws {AlgDiv(:lhs, :rhs)};
+pow = ws '(' ws exp:base ws '^' ws exp:expnt ws ')' ws {AlgPow(:base, :expnt)};

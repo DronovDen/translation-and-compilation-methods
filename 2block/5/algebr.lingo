@@ -1,0 +1,12 @@
+S = ws (sum | min | mul | div | neg | int);
+sum = "(" S:l ws "+" ws S:r ")" { AlgSum(:l, :r)};
+min = "(" S:l ws "-" ws S:r ")" { AlgMin(:l, :r)};
+mul = "(" S:l ws "*" ws S:r ")" { AlgMul(:l, :r)};
+div = "(" S:l ws "/" ws S:r ")" { AlgDiv(:l, :r)};
+neg = "-" ws S:e { AlgNeg(:e)};
+
+int = digit+ $s ws { AlgInt(s2i($s)) };
+digit = '0'-'9';
+
+ws = ws_*;
+ws_ = ' ' | '\t' | '\n' | '\r';

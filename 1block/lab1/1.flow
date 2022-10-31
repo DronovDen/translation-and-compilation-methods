@@ -1,0 +1,16 @@
+//Написать фукнцию, преобразующую массив целых чисел в массив строк,
+//например: [1, 2, 3] в ["1", "2", "3"], распечатать этот массив.
+//Использовать функции: map, i2s, strGlue, println.
+
+
+import runtime;
+import ds/array;
+import string;
+
+main() {
+    int_arr : [int] = [1, 2, 3, 4, 5];
+    str_arr : [string] = map(int_arr, \i -> i2s(i));
+    str : string = strGlue(str_arr, ", ");
+    println(str);
+    quit(0);
+}
